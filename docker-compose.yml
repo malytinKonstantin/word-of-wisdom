@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  server:
+    build: ./server
+    container_name: word-of-wisdom-server
+    ports:
+      - "3333:3333"
+    networks:
+      - pow_network
+
+  client:
+    build: ./client
+    depends_on:
+      - server
+    container_name: word-of-wisdom-client
+    networks:
+      - pow_network
+
+networks:
+  pow_network:
