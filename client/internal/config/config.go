@@ -2,9 +2,10 @@ package config
 
 import "time"
 
+// Config содержит настройки клиента для подключения к серверу
 type Config struct {
-	ServerAddr string
-	Timeout    time.Duration
+	ServerAddr string        // Адрес сервера (хост и порт)
+	Timeout    time.Duration // Таймаут для сетевых операций
 }
 
 func NewDefault() *Config {

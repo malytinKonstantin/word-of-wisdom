@@ -2,15 +2,16 @@ package config
 
 import "time"
 
+// Config содержит настройки сервера
 type Config struct {
-	Port           string
-	BaseDifficulty int
-	MaxDifficulty  int
-	MinDifficulty  int
-	ReadTimeout    time.Duration
-	MinSolveTime   time.Duration
-	MaxSolveTime   time.Duration
-	MaxConnections int
+	Port           string        // Порт для запуска сервера
+	BaseDifficulty int           // Начальная сложность PoW
+	MaxDifficulty  int           // Максимальная сложность PoW
+	MinDifficulty  int           // Минимальная сложность PoW
+	ReadTimeout    time.Duration // Таймаут чтения данных от клиента
+	MinSolveTime   time.Duration // Минимальное время решения для регулировки сложности
+	MaxSolveTime   time.Duration // Максимальное время решения для регулировки сложности
+	MaxConnections int           // Максимальное количество одновременных подключений
 }
 
 func NewDefaultConfig() *Config {

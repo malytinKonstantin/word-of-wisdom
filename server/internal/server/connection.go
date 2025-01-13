@@ -14,27 +14,36 @@ import (
 )
 
 func (s *Server) acceptConnections(listener net.Listener, quit chan os.Signal) error {
+	log.Printf("Сервер начал прием подключений. Максимальное количество одновременных подключений: %d", s.config.MaxConnections)
+
 	for {
+		// Проверяем лимит активных подключений
 		if atomic.LoadInt32(&s.activeConnections) >= int32(s.config.MaxConnections) {
+			log.Printf("Достигнуто максимальное количество подключений (%d). Ожидание освобождения...", s.config.MaxConnections)
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
+		// Принимаем новое соединение
 		conn, err := listener.Accept()
 		if err != nil {
 			select {
 			case <-quit:
 				return nil
 			default:
-				log.Printf("Ошибка принятия соединения: %v", err)
+				log.Printf("Ошибка принятия соединения от %v: %v", conn.RemoteAddr(), err)
 				continue
 			}
 		}
 
-		atomic.AddInt32(&s.activeConnections, 1)
+		currentConnections := atomic.AddInt32(&s.activeConnections, 1)
+		log.Printf("Новое подключение от %v. Текущее количество активных подключений: %d", conn.RemoteAddr(), currentConnections)
+
+		// Обрабатываем соединение в отдельной горутине
 		go func() {
 			s.handleConnection(conn)
-			atomic.AddInt32(&s.activeConnections, -1)
+			remainingConnections := atomic.AddInt32(&s.activeConnections, -1)
+			log.Printf("Соединение с %v закрыто. Осталось активных подключений: %d", conn.RemoteAddr(), remainingConnections)
 		}()
 	}
 }
@@ -43,24 +52,38 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer s.handlePanic(conn)
 	defer conn.Close()
 
+	clientAddr := conn.RemoteAddr()
+	log.Printf("Начало обработки соединения от %v", clientAddr)
+
 	if err := conn.SetDeadline(time.Now().Add(s.config.ReadTimeout)); err != nil {
-		log.Printf("Ошибка установки таймаута: %v", err)
+		log.Printf("Ошибка установки таймаута для %v: %v", clientAddr, err)
 		return
 	}
 
 	challenge := utils.GenerateChallenge()
+	log.Printf("Сгенерирован challenge для %v: %s", clientAddr, challenge)
+
 	if err := s.sendChallenge(conn, challenge); err != nil {
+		log.Printf("Ошибка отправки challenge клиенту %v: %v", clientAddr, err)
 		return
 	}
 
+	difficulty := s.difficultyManager.GetDifficulty()
+	log.Printf("Текущая сложность для %v: %d", clientAddr, difficulty)
+
 	if err := s.sendDifficulty(conn); err != nil {
+		log.Printf("Ошибка отправки сложности клиенту %v: %v", clientAddr, err)
 		return
 	}
 
 	startTime := time.Now()
 	if err := s.handleProofOfWork(conn, challenge, startTime); err != nil {
-		log.Printf("Ошибка обработки proof-of-work: %v", err)
+		log.Printf("Ошибка обработки proof-of-work для %v: %v", clientAddr, err)
+		return
 	}
+
+	solveTime := time.Since(startTime)
+	log.Printf("Клиент %v успешно решил задачу за %v", clientAddr, solveTime)
 }
 
 func (s *Server) handlePanic(conn net.Conn) {

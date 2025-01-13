@@ -11,6 +11,7 @@ import (
 func main() {
 	config := config.NewDefaultConfig()
 
+	// Обработка флагов командной строки для переопределения настроек
 	port := flag.String("port", config.Port, "Порт для запуска сервера")
 	certPath := flag.String("cert", "certs/server.crt", "Путь к файлу сертификата")
 	keyPath := flag.String("key", "certs/server.key", "Путь к файлу ключа")
@@ -18,6 +19,7 @@ func main() {
 	maxConn := flag.Int("max-conn", config.MaxConnections, "Максимальное количество одновременных подключений")
 	flag.Parse()
 
+	// Обновляем конфигурацию на основе аргументов командной строки
 	config.MaxConnections = *maxConn
 	runtime.GOMAXPROCS(*numCPU)
 

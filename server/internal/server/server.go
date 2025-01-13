@@ -8,17 +8,19 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/pow"
 	"word-of-wisdom-server/internal/storage"
 )
 
+// Server представляет серверное приложение, обрабатывающее клиентские запросы
 type Server struct {
-	config            *config.Config
-	difficultyManager *pow.DifficultyManager
-	quoteStorage      *storage.QuoteStorage
-	proofOfWork       *pow.ProofOfWork
-	activeConnections int32
+	config            *config.Config         // Конфигурация сервера
+	difficultyManager *pow.DifficultyManager // Менеджер сложности PoW
+	quoteStorage      *storage.QuoteStorage  // Хранилище цитат
+	proofOfWork       *pow.ProofOfWork       // Обработчик механизма PoW
+	activeConnections int32                  // Текущее количество активных подключений
 }
 
 func New(config *config.Config) *Server {
@@ -34,6 +36,7 @@ func New(config *config.Config) *Server {
 }
 
 func (s *Server) Run(port, certPath, keyPath string) error {
+	// Загружаем сертификат и ключ для TLS
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
 		return fmt.Errorf("Ошибка загрузки сертификата: %v", err)
@@ -44,14 +47,16 @@ func (s *Server) Run(port, certPath, keyPath string) error {
 		MinVersion:   tls.VersionTLS12,
 	}
 
+	// Запускаем TLS-листенер
 	listener, err := tls.Listen("tcp", port, tlsConfig)
 	if err != nil {
-		return fmt.Errorf("ошибка запуска сервера: %v", err)
+		return fmt.Errorf("Ошибка запуска сервера: %v", err)
 	}
 	defer listener.Close()
 
 	log.Printf("Сервер запущен на порту %s", port)
 
+	// Обработка системных сигналов для корректного завершения работы
 	quit := s.setupSignalHandler(listener)
 	return s.acceptConnections(listener, quit)
 }

@@ -6,10 +6,11 @@ import (
 	"sync/atomic"
 )
 
+// QuoteStorage предоставляет доступ к хранению и получению цитат
 type QuoteStorage struct {
-	quotes    []string
-	quoteMux  sync.RWMutex
-	randIndex int32
+	quotes    []string     // Список цитат
+	quoteMux  sync.RWMutex // Мьютекс для безопасного доступа
+	randIndex int32        // Индекс для получения случайной цитаты
 }
 
 func New() *QuoteStorage {
@@ -26,6 +27,7 @@ func New() *QuoteStorage {
 			"В жизни нет ничего невозможного, если вы не боитесь пробовать. — Сакити Тоёда",
 		},
 	}
+	// Перемешиваем список цитат
 	rand.Shuffle(len(qs.quotes), func(i, j int) {
 		qs.quotes[i], qs.quotes[j] = qs.quotes[j], qs.quotes[i]
 	})
