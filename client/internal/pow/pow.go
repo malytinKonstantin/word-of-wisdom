@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,11 +16,12 @@ func SolveProofOfWork(challenge string, difficulty int) string {
 	prefix := strings.Repeat("0", difficulty)
 	numCPU := runtime.NumCPU()
 	resultChan := make(chan string)
+	done := make(chan struct{})
 	var wg sync.WaitGroup
+	var attemptsCounter uint64
 
 	log.Printf("🔄 Запуск решения PoW на %d CPU, требуемый префикс: '%s'", numCPU, prefix)
 	startTime := time.Now()
-	attemptsCounter := uint64(0)
 
 	for i := 0; i < numCPU; i++ {
 		wg.Add(1)
@@ -33,10 +35,13 @@ func SolveProofOfWork(challenge string, difficulty int) string {
 
 			for {
 				select {
+				case <-done:
+					return
 				default:
 					data := challenge + strconv.FormatInt(nonce, 10)
 					hash := sha256.Sum256([]byte(data))
 					hashStr := hex.EncodeToString(hash[:])
+					atomic.AddUint64(&attemptsCounter, 1)
 					localAttempts++
 
 					if strings.HasPrefix(hashStr, prefix) {
@@ -53,6 +58,8 @@ func SolveProofOfWork(challenge string, difficulty int) string {
 	}
 
 	nonce := <-resultChan
+	close(done)
+	wg.Wait()
 	log.Printf("✅ PoW решен за %v, всего попыток: %d", time.Since(startTime), attemptsCounter)
 	return nonce
 }
