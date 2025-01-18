@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -37,7 +38,15 @@ func main() {
 
 	powStartTime := time.Now()
 	log.Printf("⚙️ Начало решения Proof of Work...")
-	nonce := pow.SolveProofOfWork(challenge, difficulty)
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
+	defer cancel()
+
+	nonce, err := pow.SolveProofOfWork(ctx, challenge, difficulty)
+	if err != nil {
+		log.Fatalf("❌ Ошибка при решении Proof of Work: %v", err)
+	}
+
 	log.Printf("✅ Proof of Work решен за %v, найденный nonce='%s'",
 		time.Since(powStartTime), nonce)
 
