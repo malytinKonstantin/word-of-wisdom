@@ -2,6 +2,7 @@ package pow
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -29,11 +30,11 @@ func New(config *config.Config, dm *DifficultyManager, qs *storage.QuoteStorage)
 	}
 }
 
-func (p *ProofOfWork) HandleProofOfWork(conn net.Conn, challenge string, startTime time.Time) error {
+func (p *ProofOfWork) HandleProofOfWork(ctx context.Context, conn net.Conn, challenge string, startTime time.Time) error {
 	clientAddr := conn.RemoteAddr()
 
-	// Считываем nonce от клиента
-	nonce, err := p.readNonce(conn)
+	// Считываем nonce от клиента с использованием контекста
+	nonce, err := p.readNonce(ctx, conn)
 	if err != nil {
 		log.Printf("Ошибка чтения nonce от %v: %v", clientAddr, err)
 		return err
@@ -80,11 +81,27 @@ func (p *ProofOfWork) VerifyProofOfWork(challenge, nonce string) bool {
 }
 
 // readNonce считывает nonce от клиента
-func (p *ProofOfWork) readNonce(conn net.Conn) (string, error) {
+func (p *ProofOfWork) readNonce(ctx context.Context, conn net.Conn) (string, error) {
 	reader := bufio.NewReader(conn)
-	nonce, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("ошибка чтения nonce: %v", err)
+
+	nonceChan := make(chan string, 1)
+	errChan := make(chan error, 1)
+
+	go func() {
+		nonce, err := reader.ReadString('\n')
+		if err != nil {
+			errChan <- fmt.Errorf("ошибка чтения nonce: %v", err)
+			return
+		}
+		nonceChan <- strings.TrimSpace(nonce)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case err := <-errChan:
+		return "", err
+	case nonce := <-nonceChan:
+		return nonce, nil
 	}
-	return strings.TrimSpace(nonce), nil
 }

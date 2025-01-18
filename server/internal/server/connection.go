@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -31,34 +32,38 @@ func (s *Server) acceptConnections(listener net.Listener, quit chan os.Signal) e
 			case <-quit:
 				return nil
 			default:
-				log.Printf("Ошибка принятия соединения от %v: %v", conn.RemoteAddr(), err)
+				log.Printf("Ошибка принятия соединения: %v", err)
 				continue
 			}
 		}
 
-		currentConnections := atomic.AddInt32(&s.activeConnections, 1)
-		log.Printf("Новое подключение от %v. Текущее количество активных подключений: %d", conn.RemoteAddr(), currentConnections)
+		atomic.AddInt32(&s.activeConnections, 1)
+		log.Printf("Новое подключение от %v", conn.RemoteAddr())
 
-		// Обрабатываем соединение в отдельной горутине
-		go func() {
-			s.handleConnection(conn)
-			remainingConnections := atomic.AddInt32(&s.activeConnections, -1)
-			log.Printf("Соединение с %v закрыто. Осталось активных подключений: %d", conn.RemoteAddr(), remainingConnections)
-		}()
+		go func(conn net.Conn) {
+			defer func() {
+				conn.Close()
+				atomic.AddInt32(&s.activeConnections, -1)
+				log.Printf("Соединение с %v закрыто", conn.RemoteAddr())
+			}()
+
+			// Создаем контекст для этого соединения
+			ctx := context.Background()
+			s.handleConnection(ctx, conn)
+		}(conn)
 	}
 }
 
-func (s *Server) handleConnection(conn net.Conn) {
+func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	defer s.handlePanic(conn)
 	defer conn.Close()
 
 	clientAddr := conn.RemoteAddr()
 	log.Printf("Начало обработки соединения от %v", clientAddr)
 
-	if err := conn.SetDeadline(time.Now().Add(s.config.ReadTimeout)); err != nil {
-		log.Printf("Ошибка установки таймаута для %v: %v", clientAddr, err)
-		return
-	}
+	// Устанавливаем таймаут на соединение через контекст
+	connCtx, cancel := context.WithTimeout(ctx, s.config.ReadTimeout)
+	defer cancel()
 
 	challenge := utils.GenerateChallenge()
 	log.Printf("Сгенерирован challenge для %v: %s", clientAddr, challenge)
@@ -68,16 +73,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
-	difficulty := s.difficultyManager.GetDifficulty()
-	log.Printf("Текущая сложность для %v: %d", clientAddr, difficulty)
-
 	if err := s.sendDifficulty(conn); err != nil {
 		log.Printf("Ошибка отправки сложности клиенту %v: %v", clientAddr, err)
 		return
 	}
 
 	startTime := time.Now()
-	if err := s.handleProofOfWork(conn, challenge, startTime); err != nil {
+	if err := s.handleProofOfWork(connCtx, conn, challenge, startTime); err != nil {
 		log.Printf("Ошибка обработки proof-of-work для %v: %v", clientAddr, err)
 		return
 	}
@@ -140,6 +142,6 @@ func (s *Server) sendQuote(conn net.Conn) error {
 	return nil
 }
 
-func (s *Server) handleProofOfWork(conn net.Conn, challenge string, startTime time.Time) error {
-	return s.proofOfWork.HandleProofOfWork(conn, challenge, startTime)
+func (s *Server) handleProofOfWork(ctx context.Context, conn net.Conn, challenge string, startTime time.Time) error {
+	return s.proofOfWork.HandleProofOfWork(ctx, conn, challenge, startTime)
 }
