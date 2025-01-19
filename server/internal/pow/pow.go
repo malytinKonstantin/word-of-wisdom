@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"word-of-wisdom-server/internal/config"
+	"word-of-wisdom-server/internal/container"
 	"word-of-wisdom-server/internal/interfaces"
 	"word-of-wisdom-server/internal/logger"
 )
@@ -22,7 +23,11 @@ type ProofOfWork struct {
 	quoteStorage      interfaces.QuoteStorage
 }
 
-func New(config *config.Config, dm interfaces.DifficultyManager, qs interfaces.QuoteStorage) *ProofOfWork {
+func New(c *container.Container) *ProofOfWork {
+	config := c.Resolve("config").(*config.Config)
+	dm := c.Resolve("difficultyManager").(interfaces.DifficultyManager)
+	qs := c.Resolve("quoteStorage").(interfaces.QuoteStorage)
+
 	return &ProofOfWork{
 		config:            config,
 		difficultyManager: dm,

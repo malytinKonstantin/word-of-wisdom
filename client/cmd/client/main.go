@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"word-of-wisdom-client/internal/config"
+	"word-of-wisdom-client/internal/container"
 	"word-of-wisdom-client/internal/interfaces"
 	"word-of-wisdom-client/internal/logger"
 	"word-of-wisdom-client/internal/network"
@@ -18,10 +19,18 @@ func main() {
 		Dur("timeout", cfg.Timeout).
 		Msg("Запуск клиента с конфигурацией")
 
-	var netClient interfaces.NetworkClient = network.NewDefaultNetworkClient(cfg)
-	var powSolver interfaces.PoWSolver = pow.NewDefaultPoWSolver()
+	c := container.New()
+
+	// Регистрируем зависимости
+	c.Register("config", cfg)
+	c.Register("networkClient", network.NewDefaultNetworkClient(cfg))
+	c.Register("powSolver", pow.NewDefaultPoWSolver())
 
 	startTime := time.Now()
+
+	netClient := c.Resolve("networkClient").(interfaces.NetworkClient)
+	powSolver := c.Resolve("powSolver").(interfaces.PoWSolver)
+
 	conn, err := netClient.Connect(cfg.ServerAddr)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("Ошибка подключения к серверу")

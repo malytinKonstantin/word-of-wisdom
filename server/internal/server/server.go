@@ -10,6 +10,7 @@ import (
 	"word-of-wisdom-server/internal/logger"
 
 	"word-of-wisdom-server/internal/config"
+	"word-of-wisdom-server/internal/container"
 	"word-of-wisdom-server/internal/interfaces"
 )
 
@@ -22,7 +23,12 @@ type Server struct {
 	activeConnections int32
 }
 
-func New(config *config.Config, dm interfaces.DifficultyManager, qs interfaces.QuoteStorage, po interfaces.ProofOfWorkHandler) *Server {
+func New(c *container.Container) *Server {
+	config := c.Resolve("config").(*config.Config)
+	dm := c.Resolve("difficultyManager").(interfaces.DifficultyManager)
+	qs := c.Resolve("quoteStorage").(interfaces.QuoteStorage)
+	po := c.Resolve("proofOfWorkHandler").(interfaces.ProofOfWorkHandler)
+
 	return &Server{
 		config:            config,
 		difficultyManager: dm,
