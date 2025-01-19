@@ -1,11 +1,11 @@
 package pow
 
 import (
-	"log"
 	"sync/atomic"
 	"time"
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/interfaces"
+	"word-of-wisdom-server/internal/logger"
 )
 
 // DifficultyManager управляет динамическим изменением сложности PoW
@@ -33,8 +33,11 @@ func (dm *DifficultyManager) SetDifficulty(difficulty int) {
 
 // AdjustDifficulty корректирует сложность на основе времени решения клиентом
 func (dm *DifficultyManager) AdjustDifficulty(solveTime time.Duration) {
-	currentDifficulty := atomic.LoadInt32(&dm.difficulty)
-	log.Printf("Корректировка сложности. Текущая: %d, Время решения: %v", currentDifficulty, solveTime)
+	currentDifficulty := dm.GetDifficulty()
+	logger.Log.Info().
+		Int32("current_difficulty", currentDifficulty).
+		Dur("solve_time", solveTime).
+		Msg("Корректировка сложности")
 
 	for {
 		current := atomic.LoadInt32(&dm.difficulty)
@@ -42,14 +45,22 @@ func (dm *DifficultyManager) AdjustDifficulty(solveTime time.Duration) {
 		switch {
 		case solveTime < dm.config.MinSolveTime && current < int32(dm.config.MaxDifficulty):
 			next = current + 1
-			log.Printf("Время решения слишком быстрое (%v < %v). Повышение сложности до %d",
-				solveTime, dm.config.MinSolveTime, next)
+			logger.Log.Info().
+				Int32("current_difficulty", current).
+				Int32("next_difficulty", next).
+				Dur("solve_time", solveTime).
+				Msg("Время решения слишком быстрое. Повышение сложности")
 		case solveTime > dm.config.MaxSolveTime && current > int32(dm.config.MinDifficulty):
 			next = current - 1
-			log.Printf("Время решения слишком долгое (%v > %v). Понижение сложности до %d",
-				solveTime, dm.config.MaxSolveTime, next)
+			logger.Log.Info().
+				Int32("current_difficulty", current).
+				Int32("next_difficulty", next).
+				Dur("solve_time", solveTime).
+				Msg("Время решения слишком долгое. Понижение сложности")
 		default:
-			log.Printf("Сложность остается без изменений: %d", current)
+			logger.Log.Info().
+				Int32("current_difficulty", current).
+				Msg("Сложность остается без изменений")
 			return
 		}
 		if atomic.CompareAndSwapInt32(&dm.difficulty, current, next) {

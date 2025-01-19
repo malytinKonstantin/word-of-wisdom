@@ -4,23 +4,22 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
-	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
+	"word-of-wisdom-server/internal/logger"
 	"word-of-wisdom-server/internal/utils"
 )
 
 func (s *Server) acceptConnections(listener net.Listener, quit chan os.Signal) error {
-	log.Printf("Сервер начал прием подключений. Максимальное количество одновременных подключений: %d", s.config.MaxConnections)
+	logger.Log.Info().Int("max_connections", s.config.MaxConnections).Msg("Сервер начал прием подключений")
 
 	for {
 		// Проверяем лимит активных подключений
 		if atomic.LoadInt32(&s.activeConnections) >= int32(s.config.MaxConnections) {
-			log.Printf("Достигнуто максимальное количество подключений (%d). Ожидание освобождения...", s.config.MaxConnections)
+			logger.Log.Info().Int("max_connections", s.config.MaxConnections).Msg("Достигнуто максимальное количество подключений")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -32,19 +31,19 @@ func (s *Server) acceptConnections(listener net.Listener, quit chan os.Signal) e
 			case <-quit:
 				return nil
 			default:
-				log.Printf("Ошибка принятия соединения: %v", err)
+				logger.Log.Error().Err(err).Msg("Ошибка принятия соединения")
 				continue
 			}
 		}
 
 		atomic.AddInt32(&s.activeConnections, 1)
-		log.Printf("Новое подключение от %v", conn.RemoteAddr())
+		logger.Log.Info().Str("client", conn.RemoteAddr().String()).Msg("Новое подключение")
 
 		go func(conn net.Conn) {
 			defer func() {
 				conn.Close()
 				atomic.AddInt32(&s.activeConnections, -1)
-				log.Printf("Соединение с %v закрыто", conn.RemoteAddr())
+				logger.Log.Info().Str("client", conn.RemoteAddr().String()).Msg("Соединение закрыто")
 			}()
 
 			// Создаем контекст для этого соединения
@@ -58,39 +57,39 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	defer s.handlePanic(conn)
 	defer conn.Close()
 
-	clientAddr := conn.RemoteAddr()
-	log.Printf("Начало обработки соединения от %v", clientAddr)
+	clientAddr := conn.RemoteAddr().String()
+	logger.Log.Info().Str("client", clientAddr).Msg("Начало обработки соединения")
 
 	// Устанавливаем таймаут на соединение через контекст
 	connCtx, cancel := context.WithTimeout(ctx, s.config.ReadTimeout)
 	defer cancel()
 
 	challenge := utils.GenerateChallenge()
-	log.Printf("Сгенерирован challenge для %v: %s", clientAddr, challenge)
+	logger.Log.Info().Str("client", clientAddr).Str("challenge", challenge).Msg("Сгенерирован challenge для клиента")
 
 	if err := s.sendChallenge(conn, challenge); err != nil {
-		log.Printf("Ошибка отправки challenge клиенту %v: %v", clientAddr, err)
+		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки challenge клиенту")
 		return
 	}
 
 	if err := s.sendDifficulty(conn); err != nil {
-		log.Printf("Ошибка отправки сложности клиенту %v: %v", clientAddr, err)
+		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки сложности клиенту")
 		return
 	}
 
 	startTime := time.Now()
 	if err := s.handleProofOfWork(connCtx, conn, challenge, startTime); err != nil {
-		log.Printf("Ошибка обработки proof-of-work для %v: %v", clientAddr, err)
+		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка обработки proof-of-work для клиента")
 		return
 	}
 
 	solveTime := time.Since(startTime)
-	log.Printf("Клиент %v успешно решил задачу за %v", clientAddr, solveTime)
+	logger.Log.Info().Str("client", clientAddr).Dur("solve_time", solveTime).Msg("Клиент успешно решил задачу")
 }
 
 func (s *Server) handlePanic(conn net.Conn) {
 	if r := recover(); r != nil {
-		log.Printf("Восстановление после паники: %v\nСтек вызовов:\n%s", r, debug.Stack())
+		logger.Log.Error().Interface("recover", r).Msg("Паника в goroutine")
 	}
 }
 
@@ -102,10 +101,10 @@ func (s *Server) readNonce(conn net.Conn) (string, error) {
 	}
 
 	nonce = strings.TrimSpace(nonce)
-	log.Printf("Получен nonce: %s", nonce)
+	logger.Log.Info().Str("nonce", nonce).Msg("Получен nonce")
 
 	if len(nonce) == 0 {
-		log.Printf("Получен пустой nonce")
+		logger.Log.Info().Msg("Получен пустой nonce")
 		fmt.Fprintln(conn, "Ошибка: пустой nonce")
 		return "", fmt.Errorf("пустой nonce")
 	}
@@ -114,9 +113,9 @@ func (s *Server) readNonce(conn net.Conn) (string, error) {
 }
 
 func (s *Server) sendChallenge(conn net.Conn, challenge string) error {
-	log.Printf("Отправка challenge клиенту: %s", challenge)
+	logger.Log.Info().Str("challenge", challenge).Msg("Отправка challenge клиенту")
 	if _, err := fmt.Fprintln(conn, challenge); err != nil {
-		log.Printf("Ошибка отправки challenge: %v", err)
+		logger.Log.Error().Err(err).Msg("Ошибка отправки challenge")
 		return err
 	}
 	return nil
@@ -124,9 +123,9 @@ func (s *Server) sendChallenge(conn net.Conn, challenge string) error {
 
 func (s *Server) sendDifficulty(conn net.Conn) error {
 	difficulty := s.difficultyManager.GetDifficulty()
-	log.Printf("Отправка сложности клиенту: %d", difficulty)
+	logger.Log.Info().Int("difficulty", difficulty).Msg("Отправка сложности клиенту")
 	if _, err := fmt.Fprintln(conn, difficulty); err != nil {
-		log.Printf("Ошибка отправки сложности: %v", err)
+		logger.Log.Error().Err(err).Msg("Ошибка отправки сложности")
 		return err
 	}
 	return nil
@@ -134,9 +133,9 @@ func (s *Server) sendDifficulty(conn net.Conn) error {
 
 func (s *Server) sendQuote(conn net.Conn) error {
 	quote := s.quoteStorage.GetRandomQuote()
-	log.Printf("Отправка цитаты: %s", quote)
+	logger.Log.Info().Str("quote", quote).Msg("Отправка цитаты")
 	if _, err := fmt.Fprintln(conn, quote); err != nil {
-		log.Printf("Ошибка отправки цитаты: %v", err)
+		logger.Log.Error().Err(err).Msg("Ошибка отправки цитаты")
 		return err
 	}
 	return nil

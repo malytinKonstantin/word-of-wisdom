@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
+
+	"word-of-wisdom-client/internal/logger"
 )
 
 type DefaultPoWSolver struct{}
@@ -27,8 +27,10 @@ func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge stri
 	var wg sync.WaitGroup
 	var attemptsCounter uint64
 
-	log.Printf("🔄 Запуск решения PoW на %d CPU, требуемый префикс: '%s'", numCPU, prefix)
-	startTime := time.Now()
+	logger.Log.Info().
+		Int("num_cpu", numCPU).
+		Str("prefix", prefix).
+		Msg("Запуск решения Proof of Work")
 
 	for i := 0; i < numCPU; i++ {
 		wg.Add(1)
@@ -38,9 +40,6 @@ func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge stri
 			localAttempts := uint64(0)
 
 			challengeBytes := []byte(challenge)
-
-			log.Printf("👷 Запущен worker %d с начальным nonce=%d", workerID, startNonce)
-			workerStart := time.Now()
 
 			for {
 				select {
@@ -57,8 +56,12 @@ func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge stri
 
 					if strings.HasPrefix(hashStr, prefix) {
 						nonceStr := strconv.FormatInt(nonce, 10)
-						log.Printf("🎯 Worker %d нашел решение! nonce='%s', hash='%s', попыток=%d, время=%v",
-							workerID, nonceStr, hashStr, localAttempts, time.Since(workerStart))
+						logger.Log.Debug().
+							Int("worker_id", workerID).
+							Str("nonce", nonceStr).
+							Str("hash", hashStr).
+							Uint64("local_attempts", localAttempts).
+							Msg("Найдено решение")
 						select {
 						case resultChan <- nonceStr:
 						case <-done:
@@ -82,6 +85,8 @@ func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge stri
 		wg.Wait()
 	}
 
-	log.Printf("✅ PoW решен за %v, всего попыток: %d", time.Since(startTime), atomic.LoadUint64(&attemptsCounter))
+	logger.Log.Info().
+		Uint64("total_attempts", atomic.LoadUint64(&attemptsCounter)).
+		Msg("Proof of Work решен")
 	return nonce, nil
 }

@@ -2,15 +2,17 @@ package main
 
 import (
 	"flag"
-	"log"
 	"runtime"
 	"word-of-wisdom-server/internal/config"
+	"word-of-wisdom-server/internal/logger"
 	"word-of-wisdom-server/internal/pow"
 	"word-of-wisdom-server/internal/server"
 	"word-of-wisdom-server/internal/storage"
 )
 
 func main() {
+	logger.Init()
+
 	config := config.NewDefaultConfig()
 
 	// Обработка флагов командной строки для переопределения настроек
@@ -31,6 +33,6 @@ func main() {
 	srv := server.New(config, dm, qs, po)
 
 	if err := srv.Run(*port, *certPath, *keyPath); err != nil {
-		log.Fatal(err)
+		logger.Log.Fatal().Err(err).Msg("Ошибка запуска сервера")
 	}
 }

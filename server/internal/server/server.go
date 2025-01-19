@@ -3,11 +3,11 @@ package server
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+	"word-of-wisdom-server/internal/logger"
 
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/interfaces"
@@ -50,7 +50,7 @@ func (s *Server) Run(port, certPath, keyPath string) error {
 	}
 	defer listener.Close()
 
-	log.Printf("Сервер запущен на порту %s", port)
+	logger.Log.Info().Msgf("Сервер запущен на порту %s", port)
 
 	// Обработка системных сигналов для корректного завершения работы
 	quit := s.setupSignalHandler(listener)
@@ -63,7 +63,7 @@ func (s *Server) setupSignalHandler(listener net.Listener) chan os.Signal {
 
 	go func() {
 		<-quit
-		log.Println("Завершение работы сервера...")
+		logger.Log.Info().Msg("Завершение работы сервера...")
 		listener.Close()
 		os.Exit(0)
 	}()

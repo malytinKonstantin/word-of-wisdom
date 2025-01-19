@@ -6,13 +6,13 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	"word-of-wisdom-client/internal/config"
+	"word-of-wisdom-client/internal/logger"
 )
 
 type DefaultNetworkClient struct {
@@ -25,7 +25,7 @@ func NewDefaultNetworkClient(cfg *config.Config) *DefaultNetworkClient {
 	certPool := x509.NewCertPool()
 	serverCert, err := ioutil.ReadFile("certs/server.crt")
 	if err != nil {
-		log.Fatalf("Не удалось прочитать сертификат сервера: %v", err)
+		logger.Log.Fatal().Err(err).Msg("Не удалось прочитать сертификат сервера")
 	}
 	certPool.AppendCertsFromPEM(serverCert)
 
@@ -41,56 +41,58 @@ func NewDefaultNetworkClient(cfg *config.Config) *DefaultNetworkClient {
 }
 
 func (nc *DefaultNetworkClient) Connect(serverAddr string) (net.Conn, error) {
-	log.Printf("🔌 Попытка подключения к %s...", serverAddr)
+	logger.Log.Info().Str("server_address", serverAddr).Msg("Попытка подключения к серверу")
 	conn, err := tls.Dial("tcp", serverAddr, nc.tlsConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Ошибка подключения к серверу: %v", err)
+		return nil, fmt.Errorf("ошибка подключения к серверу: %v", err)
 	}
-	log.Printf("✅ TLS соединение установлено с %s", conn.RemoteAddr())
+	logger.Log.Info().Str("remote_address", conn.RemoteAddr().String()).Msg("TLS соединение установлено")
 	return conn, nil
 }
 
 func (nc *DefaultNetworkClient) ReceiveChallenge(conn net.Conn) (string, int, error) {
 	reader := bufio.NewReader(conn)
 
-	log.Print("📥 Ожидание challenge от сервера...")
+	logger.Log.Info().Msg("Ожидание challenge от сервера")
 	challenge, err := readLine(reader)
 	if err != nil {
-		return "", 0, fmt.Errorf("Ошибка получения challenge: %v", err)
+		return "", 0, fmt.Errorf("ошибка получения challenge: %v", err)
 	}
-	log.Printf("✅ Получен challenge: '%s'", challenge)
+	logger.Log.Info().Str("challenge", challenge).Msg("Получен challenge")
 
-	log.Print("📥 Ожидание сложности от сервера...")
+	logger.Log.Info().Msg("Ожидание сложности от сервера")
 	diffStr, err := readLine(reader)
 	if err != nil {
-		return "", 0, fmt.Errorf("Ошибка получения сложности: %v", err)
+		return "", 0, fmt.Errorf("ошибка получения сложности: %v", err)
 	}
 
 	difficulty, err := strconv.Atoi(diffStr)
 	if err != nil {
-		return "", 0, fmt.Errorf("Некорректное значение сложности: %v", err)
+		return "", 0, fmt.Errorf("некорректное значение сложности: %v", err)
 	}
-	log.Printf("✅ Получена сложность: %d", difficulty)
+	logger.Log.Info().Int("difficulty", difficulty).Msg("Получена сложность")
 
 	return challenge, difficulty, nil
 }
 
 func (nc *DefaultNetworkClient) SendNonceAndGetQuote(conn net.Conn, nonce string) error {
-	log.Printf("📤 Отправка nonce='%s' серверу...", nonce)
+	logger.Log.Info().Str("nonce", nonce).Msg("Отправка nonce серверу")
 	startTime := time.Now()
 
 	if _, err := fmt.Fprintln(conn, nonce); err != nil {
-		return fmt.Errorf("Ошибка отправки nonce: %v", err)
+		return fmt.Errorf("ошибка отправки nonce: %v", err)
 	}
 
 	reader := bufio.NewReader(conn)
 	response, err := readLine(reader)
 	if err != nil {
-		return fmt.Errorf("Ошибка получения ответа: %v", err)
+		return fmt.Errorf("ошибка получения ответа: %v", err)
 	}
 
-	log.Printf("✨ Получена цитата (за %v):", time.Since(startTime))
-	log.Printf("📜 %s", response)
+	logger.Log.Info().
+		Dur("response_time", time.Since(startTime)).
+		Str("quote", response).
+		Msg("Получена цитата от сервера")
 	return nil
 }
 

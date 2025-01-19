@@ -3,8 +3,8 @@ package utils
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"log"
 	"sync"
+	"word-of-wisdom-server/internal/logger"
 )
 
 // challengePool используется для повторного использования выделенной памяти
@@ -20,7 +20,7 @@ func GenerateChallenge() string {
 	defer challengePool.Put(bytes)
 
 	if _, err := rand.Read(bytes); err != nil {
-		log.Fatalf("Ошибка генерации challenge: %v", err)
+		logger.Log.Fatal().Err(err).Msg("Ошибка генерации challenge")
 	}
 	return hex.EncodeToString(bytes)
 }
