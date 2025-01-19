@@ -12,23 +12,25 @@ import (
 	"time"
 
 	"word-of-wisdom-server/internal/config"
-	"word-of-wisdom-server/internal/storage"
+	"word-of-wisdom-server/internal/interfaces"
 )
 
 // ProofOfWork содержит логику работы механизма Proof of Work
 type ProofOfWork struct {
-	difficultyManager *DifficultyManager    // Менеджер сложности
-	config            *config.Config        // Конфигурация сервера
-	quoteStorage      *storage.QuoteStorage // Хранилище цитат
+	difficultyManager interfaces.DifficultyManager
+	config            *config.Config
+	quoteStorage      interfaces.QuoteStorage
 }
 
-func New(config *config.Config, dm *DifficultyManager, qs *storage.QuoteStorage) *ProofOfWork {
+func New(config *config.Config, dm interfaces.DifficultyManager, qs interfaces.QuoteStorage) *ProofOfWork {
 	return &ProofOfWork{
 		config:            config,
 		difficultyManager: dm,
 		quoteStorage:      qs,
 	}
 }
+
+var _ interfaces.ProofOfWorkHandler = (*ProofOfWork)(nil)
 
 func (p *ProofOfWork) HandleProofOfWork(ctx context.Context, conn net.Conn, challenge string, startTime time.Time) error {
 	clientAddr := conn.RemoteAddr()

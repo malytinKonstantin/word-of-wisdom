@@ -10,23 +10,19 @@ import (
 	"syscall"
 
 	"word-of-wisdom-server/internal/config"
-	"word-of-wisdom-server/internal/pow"
-	"word-of-wisdom-server/internal/storage"
+	"word-of-wisdom-server/internal/interfaces"
 )
 
 // Server представляет серверное приложение, обрабатывающее клиентские запросы
 type Server struct {
-	config            *config.Config         // Конфигурация сервера
-	difficultyManager *pow.DifficultyManager // Менеджер сложности PoW
-	quoteStorage      *storage.QuoteStorage  // Хранилище цитат
-	proofOfWork       *pow.ProofOfWork       // Обработчик механизма PoW
-	activeConnections int32                  // Текущее количество активных подключений
+	config            *config.Config
+	difficultyManager interfaces.DifficultyManager
+	quoteStorage      interfaces.QuoteStorage
+	proofOfWork       interfaces.ProofOfWorkHandler
+	activeConnections int32
 }
 
-func New(config *config.Config) *Server {
-	dm := pow.NewDifficultyManager(config)
-	qs := storage.New()
-	po := pow.New(config, dm, qs)
+func New(config *config.Config, dm interfaces.DifficultyManager, qs interfaces.QuoteStorage, po interfaces.ProofOfWorkHandler) *Server {
 	return &Server{
 		config:            config,
 		difficultyManager: dm,

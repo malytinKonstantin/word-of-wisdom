@@ -5,7 +5,9 @@ import (
 	"log"
 	"runtime"
 	"word-of-wisdom-server/internal/config"
+	"word-of-wisdom-server/internal/pow"
 	"word-of-wisdom-server/internal/server"
+	"word-of-wisdom-server/internal/storage"
 )
 
 func main() {
@@ -23,9 +25,12 @@ func main() {
 	config.MaxConnections = *maxConn
 	runtime.GOMAXPROCS(*numCPU)
 
-	server := server.New(config)
+	dm := pow.NewDifficultyManager(config)
+	qs := storage.New()
+	po := pow.New(config, dm, qs)
+	srv := server.New(config, dm, qs, po)
 
-	if err := server.Run(*port, *certPath, *keyPath); err != nil {
+	if err := srv.Run(*port, *certPath, *keyPath); err != nil {
 		log.Fatal(err)
 	}
 }

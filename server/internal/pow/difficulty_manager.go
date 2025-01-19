@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 	"word-of-wisdom-server/internal/config"
+	"word-of-wisdom-server/internal/interfaces"
 )
 
 // DifficultyManager управляет динамическим изменением сложности PoW
@@ -19,6 +20,8 @@ func NewDifficultyManager(config *config.Config) *DifficultyManager {
 		config:     config,
 	}
 }
+
+var _ interfaces.DifficultyManager = (*DifficultyManager)(nil)
 
 func (dm *DifficultyManager) GetDifficulty() int {
 	return int(atomic.LoadInt32(&dm.difficulty))

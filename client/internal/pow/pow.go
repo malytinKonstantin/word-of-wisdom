@@ -13,19 +13,19 @@ import (
 	"time"
 )
 
-func SolveProofOfWork(ctx context.Context, challenge string, difficulty int) (string, error) {
+type DefaultPoWSolver struct{}
+
+func NewDefaultPoWSolver() *DefaultPoWSolver {
+	return &DefaultPoWSolver{}
+}
+
+func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge string, difficulty int) (string, error) {
 	prefix := strings.Repeat("0", difficulty)
 	numCPU := runtime.NumCPU()
 	resultChan := make(chan string, 1)
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	var attemptsCounter uint64
-
-	bufferPool := sync.Pool{
-		New: func() interface{} {
-			return make([]byte, 0, 64)
-		},
-	}
 
 	log.Printf("🔄 Запуск решения PoW на %d CPU, требуемый префикс: '%s'", numCPU, prefix)
 	startTime := time.Now()
@@ -36,9 +36,6 @@ func SolveProofOfWork(ctx context.Context, challenge string, difficulty int) (st
 			defer wg.Done()
 			nonce := startNonce
 			localAttempts := uint64(0)
-
-			buf := bufferPool.Get().([]byte)
-			defer bufferPool.Put(buf)
 
 			challengeBytes := []byte(challenge)
 
@@ -52,11 +49,8 @@ func SolveProofOfWork(ctx context.Context, challenge string, difficulty int) (st
 				case <-done:
 					return
 				default:
-					buf = buf[:0]
-					buf = append(buf, challengeBytes...)
-					buf = strconv.AppendInt(buf, nonce, 10)
-
-					hash := sha256.Sum256(buf)
+					data := append(challengeBytes, strconv.FormatInt(nonce, 10)...)
+					hash := sha256.Sum256(data)
 					hashStr := hex.EncodeToString(hash[:])
 					atomic.AddUint64(&attemptsCounter, 1)
 					localAttempts++
@@ -77,7 +71,6 @@ func SolveProofOfWork(ctx context.Context, challenge string, difficulty int) (st
 		}(int64(i), i)
 	}
 
-	// Ожидаем результат или отмену контекста
 	var nonce string
 	select {
 	case <-ctx.Done():
@@ -91,22 +84,4 @@ func SolveProofOfWork(ctx context.Context, challenge string, difficulty int) (st
 
 	log.Printf("✅ PoW решен за %v, всего попыток: %d", time.Since(startTime), atomic.LoadUint64(&attemptsCounter))
 	return nonce, nil
-}
-
-func hasLeadingZeros(hash []byte, difficulty int) bool {
-	bytes := difficulty / 8
-	bits := difficulty % 8
-
-	for i := 0; i < bytes; i++ {
-		if hash[i] != 0 {
-			return false
-		}
-	}
-	if bits > 0 {
-		mask := byte(0xFF << (8 - bits))
-		if hash[bytes]&mask != 0 {
-			return false
-		}
-	}
-	return true
 }

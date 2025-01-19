@@ -4,6 +4,8 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	"word-of-wisdom-server/internal/interfaces"
 )
 
 // QuoteStorage предоставляет доступ к хранению и получению цитат
@@ -34,6 +36,9 @@ func New() *QuoteStorage {
 	return qs
 }
 
+var _ interfaces.QuoteStorage = (*QuoteStorage)(nil)
+
+// Реализация метода интерфейса
 func (qs *QuoteStorage) GetRandomQuote() string {
 	qs.quoteMux.RLock()
 	defer qs.quoteMux.RUnlock()
