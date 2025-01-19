@@ -13,7 +13,7 @@ import (
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/container"
 	"word-of-wisdom-server/internal/interfaces"
-	"word-of-wisdom-server/internal/logger"
+	"word-of-wisdom-server/internal/log"
 )
 
 // ProofOfWork содержит логику работы механизма Proof of Work
@@ -42,28 +42,28 @@ func (p *ProofOfWork) HandleProofOfWork(ctx context.Context, conn net.Conn, chal
 
 	nonce, err := p.readNonce(ctx, conn)
 	if err != nil {
-		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка чтения nonce")
+		log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка чтения nonce")
 		return err
 	}
-	logger.Log.Info().Str("client", clientAddr).Str("nonce", nonce).Msg("Получен nonce")
+	log.Info().Str("client", clientAddr).Str("nonce", nonce).Msg("Получен nonce")
 
 	if !p.VerifyProofOfWork(challenge, nonce) {
-		logger.Log.Error().Str("client", clientAddr).Str("challenge", challenge).Str("nonce", nonce).Msg("Неверное решение")
+		log.Error().Str("client", clientAddr).Str("challenge", challenge).Str("nonce", nonce).Msg("Неверное решение")
 		fmt.Fprintln(conn, "Ошибка: неверное решение")
 		return fmt.Errorf("неверное решение от %v", clientAddr)
 	}
 
 	solveTime := time.Since(startTime)
-	logger.Log.Info().Str("client", clientAddr).Dur("solve_time", solveTime).Msg("Успешная верификация PoW")
+	log.Info().Str("client", clientAddr).Dur("solve_time", solveTime).Msg("Успешная верификация PoW")
 
 	p.difficultyManager.AdjustDifficulty(solveTime)
 	newDifficulty := p.difficultyManager.GetDifficulty()
-	logger.Log.Info().Int("new_difficulty", newDifficulty).Msg("Сложность скорректирована")
+	log.Info().Int("new_difficulty", newDifficulty).Msg("Сложность скорректирована")
 
 	quote := p.quoteStorage.GetRandomQuote()
-	logger.Log.Info().Str("client", clientAddr).Str("quote", quote).Msg("Отправка цитаты клиенту")
+	log.Info().Str("client", clientAddr).Str("quote", quote).Msg("Отправка цитаты клиенту")
 	if _, err := fmt.Fprintln(conn, quote); err != nil {
-		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки цитаты")
+		log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки цитаты")
 		return fmt.Errorf("ошибка отправки цитаты: %v", err)
 	}
 
@@ -105,7 +105,7 @@ func (p *ProofOfWork) readNonce(ctx context.Context, conn net.Conn) (string, err
 	case err := <-errChan:
 		return "", err
 	case nonce := <-nonceChan:
-		logger.Log.Debug().Str("nonce", nonce).Msg("Nonce успешно прочитан")
+		log.Debug().Str("nonce", nonce).Msg("Nonce успешно прочитан")
 		return nonce, nil
 	}
 }

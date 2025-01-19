@@ -8,11 +8,12 @@ import (
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/container"
 	"word-of-wisdom-server/internal/interfaces"
-	"word-of-wisdom-server/internal/logger"
+	"word-of-wisdom-server/internal/log"
 )
 
 // Server представляет серверное приложение, обрабатывающее клиентские запросы
 type Server struct {
+	workerPool        chan struct{}
 	serverConfig      config.ServerConfig
 	difficultyManager interfaces.DifficultyManager
 	quoteStorage      interfaces.QuoteStorage
@@ -31,6 +32,7 @@ func New(c *container.Container) *Server {
 		difficultyManager: dm,
 		quoteStorage:      qs,
 		proofOfWork:       po,
+		workerPool:        make(chan struct{}, appConfig.Server.MaxWorkers),
 	}
 }
 
@@ -51,7 +53,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	defer listener.Close()
 
-	logger.Log.Info().Msgf("Сервер запущен на порту %s", s.serverConfig.Port)
+	log.Info().Msgf("Сервер запущен на порту %s", s.serverConfig.Port)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -60,7 +62,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		logger.Log.Info().Msg("Контекст отменён, завершаем работу сервера")
+		log.Info().Msg("Контекст отменён, завершаем работу сервера")
 		return nil
 	case err := <-errCh:
 		return err

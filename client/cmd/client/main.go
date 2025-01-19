@@ -11,7 +11,7 @@ import (
 	"word-of-wisdom-client/internal/config"
 	"word-of-wisdom-client/internal/container"
 	"word-of-wisdom-client/internal/interfaces"
-	"word-of-wisdom-client/internal/logger"
+	"word-of-wisdom-client/internal/log"
 	"word-of-wisdom-client/internal/network"
 	"word-of-wisdom-client/internal/pow"
 )
@@ -36,13 +36,13 @@ func main() {
 func runClient(cmd *cobra.Command, args []string) {
 	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
-		logger.Init("info")
-		logger.Log.Fatal().Err(err).Msg("Ошибка загрузки конфигурации")
+		log.Init("info")
+		log.Log.Fatal().Err(err).Msg("Ошибка загрузки конфигурации")
 	}
 
-	logger.Init(cfg.Logging.Level)
+	log.Init(cfg.Logging.Level)
 
-	logger.Log.Info().
+	log.Log.Info().
 		Str("server_address", cfg.Server.Address).
 		Dur("timeout", cfg.Network.Timeout).
 		Msg("Запуск клиента с конфигурацией")
@@ -63,11 +63,11 @@ func runClient(cmd *cobra.Command, args []string) {
 	defer cancel()
 
 	if err := run(ctx, cfg, netClient, powSolver, startTime); err != nil {
-		logger.Log.Error().Err(err).Msg("Ошибка во время выполнения клиента")
+		log.Log.Error().Err(err).Msg("Ошибка во время выполнения клиента")
 		os.Exit(1)
 	}
 
-	logger.Log.Info().
+	log.Log.Info().
 		Dur("total_time", time.Since(startTime)).
 		Msg("Клиент завершил работу")
 }
@@ -75,33 +75,33 @@ func runClient(cmd *cobra.Command, args []string) {
 func run(ctx context.Context, cfg *config.Config, netClient interfaces.NetworkClient, powSolver interfaces.PoWSolver, startTime time.Time) error {
 	conn, err := netClient.Connect(cfg.Server.Address)
 	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("Ошибка подключения к серверу")
+		log.Log.Fatal().Err(err).Msg("Ошибка подключения к серверу")
 	}
 	defer conn.Close()
 
-	logger.Log.Info().
+	log.Log.Info().
 		Str("server_address", cfg.Server.Address).
 		Dur("connection_time", time.Since(startTime)).
 		Msg("Успешное подключение к серверу")
 
 	challenge, difficulty, err := netClient.ReceiveChallenge(conn)
 	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("Ошибка получения challenge")
+		log.Log.Fatal().Err(err).Msg("Ошибка получения challenge")
 	}
-	logger.Log.Info().
+	log.Log.Info().
 		Str("challenge", challenge).
 		Int("difficulty", difficulty).
 		Msg("Получен challenge и сложность")
 
 	powStartTime := time.Now()
-	logger.Log.Info().Msg("Начало решения Proof of Work")
+	log.Log.Info().Msg("Начало решения Proof of Work")
 
 	nonce, err := powSolver.SolveProofOfWork(ctx, challenge, difficulty)
 	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("Ошибка при решении Proof of Work")
+		log.Log.Fatal().Err(err).Msg("Ошибка при решении Proof of Work")
 	}
 
-	logger.Log.Info().
+	log.Log.Info().
 		Dur("pow_time", time.Since(powStartTime)).
 		Str("nonce", nonce).
 		Msg("Proof of Work решен")

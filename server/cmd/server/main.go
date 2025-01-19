@@ -12,7 +12,7 @@ import (
 
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/container"
-	"word-of-wisdom-server/internal/logger"
+	"word-of-wisdom-server/internal/log"
 	"word-of-wisdom-server/internal/pow"
 	"word-of-wisdom-server/internal/server"
 	"word-of-wisdom-server/internal/storage"
@@ -41,7 +41,7 @@ func runServer(configPath string) {
 		os.Exit(1)
 	}
 
-	logger.Init(appConfig.Logging.Level)
+	log.Init(appConfig.Logging.Level)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	c := container.New()
@@ -64,11 +64,12 @@ func runServer(configPath string) {
 	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-quit
-		logger.Log.Info().Msg("Получен сигнал завершения работы")
+		log.Info().Msg("Получен сигнал завершения работы")
 		cancel()
 	}()
 
 	if err := srv.Run(ctx); err != nil {
-		logger.Log.Fatal().Err(err).Msg("Ошибка запуска сервера")
+		log.Fatal().Err(err).Msg("Ошибка запуска сервера")
+		os.Exit(1)
 	}
 }

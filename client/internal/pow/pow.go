@@ -10,7 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"word-of-wisdom-client/internal/logger"
+	"word-of-wisdom-client/internal/log"
 )
 
 type DefaultPoWSolver struct{}
@@ -27,7 +27,7 @@ func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge stri
 	var wg sync.WaitGroup
 	var attemptsCounter uint64
 
-	logger.Log.Info().
+	log.Info().
 		Int("num_cpu", numCPU).
 		Str("prefix", prefix).
 		Msg("Запуск решения Proof of Work")
@@ -56,7 +56,7 @@ func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge stri
 
 					if strings.HasPrefix(hashStr, prefix) {
 						nonceStr := strconv.FormatInt(nonce, 10)
-						logger.Log.Debug().
+						log.Debug().
 							Int("worker_id", workerID).
 							Str("nonce", nonceStr).
 							Str("hash", hashStr).
@@ -85,7 +85,7 @@ func (ps *DefaultPoWSolver) SolveProofOfWork(ctx context.Context, challenge stri
 		wg.Wait()
 	}
 
-	logger.Log.Info().
+	log.Info().
 		Uint64("total_attempts", atomic.LoadUint64(&attemptsCounter)).
 		Msg("Proof of Work решен")
 	return nonce, nil

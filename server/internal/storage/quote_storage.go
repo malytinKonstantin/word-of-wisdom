@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 
 	"word-of-wisdom-server/internal/interfaces"
-	"word-of-wisdom-server/internal/logger"
+	"word-of-wisdom-server/internal/log"
 )
 
 // QuoteStorage предоставляет доступ к хранению и получению цитат
@@ -45,7 +45,7 @@ func (qs *QuoteStorage) GetRandomQuote() string {
 	defer qs.quoteMux.RUnlock()
 	index := atomic.AddInt32(&qs.randIndex, 1) % int32(len(qs.quotes))
 	quote := qs.quotes[index]
-	logger.Log.Debug().Str("quote", quote).Msg("Получена случайная цитата")
+	log.Debug().Str("quote", quote).Msg("Получена случайная цитата")
 	return quote
 }
 

@@ -5,7 +5,7 @@ import (
 	"time"
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/interfaces"
-	"word-of-wisdom-server/internal/logger"
+	"word-of-wisdom-server/internal/log"
 )
 
 // DifficultyManager управляет динамическим изменением сложности PoW
@@ -34,7 +34,7 @@ func (dm *DifficultyManager) SetDifficulty(difficulty int) {
 // AdjustDifficulty корректирует сложность на основе времени решения клиентом
 func (dm *DifficultyManager) AdjustDifficulty(solveTime time.Duration) {
 	currentDifficulty := dm.GetDifficulty()
-	logger.Log.Info().
+	log.Info().
 		Int32("current_difficulty", currentDifficulty).
 		Dur("solve_time", solveTime).
 		Msg("Корректировка сложности")
@@ -45,20 +45,20 @@ func (dm *DifficultyManager) AdjustDifficulty(solveTime time.Duration) {
 		switch {
 		case solveTime < dm.config.MinSolveTime && current < int32(dm.config.MaxDifficulty):
 			next = current + 1
-			logger.Log.Info().
+			log.Info().
 				Int32("current_difficulty", current).
 				Int32("next_difficulty", next).
 				Dur("solve_time", solveTime).
 				Msg("Время решения слишком быстрое. Повышение сложности")
 		case solveTime > dm.config.MaxSolveTime && current > int32(dm.config.MinDifficulty):
 			next = current - 1
-			logger.Log.Info().
+			log.Info().
 				Int32("current_difficulty", current).
 				Int32("next_difficulty", next).
 				Dur("solve_time", solveTime).
 				Msg("Время решения слишком долгое. Понижение сложности")
 		default:
-			logger.Log.Info().
+			log.Info().
 				Int32("current_difficulty", current).
 				Msg("Сложность остается без изменений")
 			return
