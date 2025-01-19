@@ -1,17 +1,14 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
-	"net"
-	"os"
-	"os/signal"
-	"syscall"
-	"word-of-wisdom-server/internal/logger"
 
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/container"
 	"word-of-wisdom-server/internal/interfaces"
+	"word-of-wisdom-server/internal/logger"
 )
 
 // Server представляет серверное приложение, обрабатывающее клиентские запросы
@@ -37,9 +34,8 @@ func New(c *container.Container) *Server {
 	}
 }
 
-func (s *Server) Run(serverConfig config.ServerConfig) error {
-	// Загружаем сертификат и ключ для TLS
-	cert, err := tls.LoadX509KeyPair(serverConfig.CertPath, serverConfig.KeyPath)
+func (s *Server) Run(ctx context.Context) error {
+	cert, err := tls.LoadX509KeyPair(s.serverConfig.CertPath, s.serverConfig.KeyPath)
 	if err != nil {
 		return fmt.Errorf("Ошибка загрузки сертификата: %v", err)
 	}
@@ -49,30 +45,24 @@ func (s *Server) Run(serverConfig config.ServerConfig) error {
 		MinVersion:   tls.VersionTLS12,
 	}
 
-	// Запускаем TLS-листенер
-	listener, err := tls.Listen("tcp", serverConfig.Port, tlsConfig)
+	listener, err := tls.Listen("tcp", s.serverConfig.Port, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("Ошибка запуска сервера: %v", err)
 	}
 	defer listener.Close()
 
-	logger.Log.Info().Msgf("Сервер запущен на порту %s", serverConfig.Port)
+	logger.Log.Info().Msgf("Сервер запущен на порту %s", s.serverConfig.Port)
 
-	// Обработка системных сигналов для корректного завершения работы
-	quit := s.setupSignalHandler(listener)
-	return s.acceptConnections(listener, quit)
-}
-
-func (s *Server) setupSignalHandler(listener net.Listener) chan os.Signal {
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-
+	errCh := make(chan error, 1)
 	go func() {
-		<-quit
-		logger.Log.Info().Msg("Завершение работы сервера...")
-		listener.Close()
-		os.Exit(0)
+		errCh <- s.acceptConnections(ctx, listener)
 	}()
 
-	return quit
+	select {
+	case <-ctx.Done():
+		logger.Log.Info().Msg("Контекст отменён, завершаем работу сервера")
+		return nil
+	case err := <-errCh:
+		return err
+	}
 }

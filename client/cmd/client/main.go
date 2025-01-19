@@ -36,6 +36,7 @@ func main() {
 func runClient(cmd *cobra.Command, args []string) {
 	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
+		logger.Init("info")
 		logger.Log.Fatal().Err(err).Msg("Ошибка загрузки конфигурации")
 	}
 
@@ -58,6 +59,20 @@ func runClient(cmd *cobra.Command, args []string) {
 	netClient := c.Resolve("networkClient").(interfaces.NetworkClient)
 	powSolver := c.Resolve("powSolver").(interfaces.PoWSolver)
 
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.Timeout)
+	defer cancel()
+
+	if err := run(ctx, cfg, netClient, powSolver, startTime); err != nil {
+		logger.Log.Error().Err(err).Msg("Ошибка во время выполнения клиента")
+		os.Exit(1)
+	}
+
+	logger.Log.Info().
+		Dur("total_time", time.Since(startTime)).
+		Msg("Клиент завершил работу")
+}
+
+func run(ctx context.Context, cfg *config.Config, netClient interfaces.NetworkClient, powSolver interfaces.PoWSolver, startTime time.Time) error {
 	conn, err := netClient.Connect(cfg.Server.Address)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("Ошибка подключения к серверу")
@@ -81,9 +96,6 @@ func runClient(cmd *cobra.Command, args []string) {
 	powStartTime := time.Now()
 	logger.Log.Info().Msg("Начало решения Proof of Work")
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.Timeout)
-	defer cancel()
-
 	nonce, err := powSolver.SolveProofOfWork(ctx, challenge, difficulty)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("Ошибка при решении Proof of Work")
@@ -95,9 +107,8 @@ func runClient(cmd *cobra.Command, args []string) {
 		Msg("Proof of Work решен")
 
 	if err := netClient.SendNonceAndGetQuote(conn, nonce); err != nil {
-		logger.Log.Fatal().Err(err).Msg("Ошибка при обмене данными с сервером")
+		return fmt.Errorf("ошибка при обмене данными с сервером: %v", err)
 	}
-	logger.Log.Info().
-		Dur("total_time", time.Since(startTime)).
-		Msg("Клиент завершил работу")
+
+	return nil
 }

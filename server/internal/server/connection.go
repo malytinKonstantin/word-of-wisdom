@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -13,27 +12,30 @@ import (
 	"word-of-wisdom-server/internal/utils"
 )
 
-func (s *Server) acceptConnections(listener net.Listener, quit chan os.Signal) error {
+func (s *Server) acceptConnections(ctx context.Context, listener net.Listener) error {
 	logger.Log.Info().Int("max_connections", s.serverConfig.MaxConnections).Msg("Сервер начал прием подключений")
 
 	for {
-		// Проверяем лимит активных подключений
+		select {
+		case <-ctx.Done():
+			logger.Log.Info().Msg("Получен сигнал завершения, прекращаем прием подключений")
+			return nil
+		default:
+		}
+
 		if atomic.LoadInt32(&s.activeConnections) >= int32(s.serverConfig.MaxConnections) {
-			logger.Log.Info().Int("max_connections", s.serverConfig.MaxConnections).Msg("Достигнуто максимальное количество подключений")
+			logger.Log.Warn().Int("max_connections", s.serverConfig.MaxConnections).Msg("Достигнуто максимальное количество подключений")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
-		// Принимаем новое соединение
 		conn, err := listener.Accept()
 		if err != nil {
-			select {
-			case <-quit:
-				return nil
-			default:
-				logger.Log.Error().Err(err).Msg("Ошибка принятия соединения")
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				continue
 			}
+			logger.Log.Error().Err(err).Msg("Ошибка принятия соединения")
+			continue
 		}
 
 		atomic.AddInt32(&s.activeConnections, 1)
@@ -46,45 +48,45 @@ func (s *Server) acceptConnections(listener net.Listener, quit chan os.Signal) e
 				logger.Log.Info().Str("client", conn.RemoteAddr().String()).Msg("Соединение закрыто")
 			}()
 
-			// Создаем контекст для этого соединения
-			ctx := context.Background()
-			s.handleConnection(ctx, conn)
+			s.handleConnection(conn)
 		}(conn)
 	}
 }
 
-func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
+func (s *Server) handleConnection(conn net.Conn) {
 	defer s.handlePanic(conn)
-	defer conn.Close()
 
 	clientAddr := conn.RemoteAddr().String()
 	logger.Log.Info().Str("client", clientAddr).Msg("Начало обработки соединения")
 
-	// Устанавливаем таймаут на соединение через контекст
-	connCtx, cancel := context.WithTimeout(ctx, time.Duration(s.serverConfig.ReadTimeout)*time.Second)
-	defer cancel()
+	conn.SetReadDeadline(time.Now().Add(time.Duration(s.serverConfig.ReadTimeout) * time.Second))
 
 	challenge := utils.GenerateChallenge()
-	logger.Log.Info().Str("client", clientAddr).Str("challenge", challenge).Msg("Сгенерирован challenge для клиента")
 
 	if err := s.sendChallenge(conn, challenge); err != nil {
-		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки challenge клиенту")
+		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки challenge")
 		return
 	}
 
 	if err := s.sendDifficulty(conn); err != nil {
-		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки сложности клиенту")
+		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка отправки сложности")
 		return
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.serverConfig.ReadTimeout)*time.Second)
+	defer cancel()
 
 	startTime := time.Now()
-	if err := s.handleProofOfWork(connCtx, conn, challenge, startTime); err != nil {
-		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка обработки proof-of-work для клиента")
+
+	if err := s.handleProofOfWork(ctx, conn, challenge, startTime); err != nil {
+		logger.Log.Error().Err(err).Str("client", clientAddr).Msg("Ошибка обработки Proof of Work")
 		return
 	}
 
-	solveTime := time.Since(startTime)
-	logger.Log.Info().Str("client", clientAddr).Dur("solve_time", solveTime).Msg("Клиент успешно решил задачу")
+	logger.Log.Info().
+		Str("client", clientAddr).
+		Dur("solve_time", time.Since(startTime)).
+		Msg("Клиент успешно решил задачу")
 }
 
 func (s *Server) handlePanic(conn net.Conn) {

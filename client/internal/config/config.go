@@ -11,7 +11,6 @@ func LoadConfig(configPath string) (*Config, error) {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(configPath)
 
-	// Устанавливаем значения по умолчанию
 	viper.SetDefault("server.address", "localhost:3333")
 	viper.SetDefault("network.timeout", "30s")
 	viper.SetDefault("logging.level", "info")
@@ -25,7 +24,6 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 
-	// Парсим timeout из строки в Duration
 	timeoutStr := viper.GetString("network.timeout")
 	timeout, err := time.ParseDuration(timeoutStr)
 	if err != nil {
