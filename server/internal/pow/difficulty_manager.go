@@ -10,11 +10,11 @@ import (
 
 // DifficultyManager управляет динамическим изменением сложности PoW
 type DifficultyManager struct {
-	difficulty int32          // Текущее значение сложности
-	config     *config.Config // Конфигурация сервера
+	difficulty int32            // Текущее значение сложности
+	config     config.PoWConfig // Конфигурация PoW
 }
 
-func NewDifficultyManager(config *config.Config) *DifficultyManager {
+func NewDifficultyManager(config config.PoWConfig) *DifficultyManager {
 	return &DifficultyManager{
 		difficulty: int32(config.BaseDifficulty),
 		config:     config,

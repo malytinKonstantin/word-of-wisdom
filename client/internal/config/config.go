@@ -1,16 +1,37 @@
 package config
 
-import "time"
+import (
+	"time"
 
-// Config содержит настройки клиента для подключения к серверу
-type Config struct {
-	ServerAddr string        // Адрес сервера (хост и порт)
-	Timeout    time.Duration // Таймаут для сетевых операций
-}
+	"github.com/spf13/viper"
+)
 
-func NewDefault() *Config {
-	return &Config{
-		ServerAddr: "server:3333",
-		Timeout:    30 * time.Second,
+func LoadConfig(configPath string) (*Config, error) {
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(configPath)
+
+	// Устанавливаем значения по умолчанию
+	viper.SetDefault("server.address", "localhost:3333")
+	viper.SetDefault("network.timeout", "30s")
+	viper.SetDefault("logging.level", "info")
+
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, err
 	}
+
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return nil, err
+	}
+
+	// Парсим timeout из строки в Duration
+	timeoutStr := viper.GetString("network.timeout")
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Network.Timeout = timeout
+
+	return &cfg, nil
 }

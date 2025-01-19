@@ -16,7 +16,7 @@ import (
 
 // Server представляет серверное приложение, обрабатывающее клиентские запросы
 type Server struct {
-	config            *config.Config
+	serverConfig      config.ServerConfig
 	difficultyManager interfaces.DifficultyManager
 	quoteStorage      interfaces.QuoteStorage
 	proofOfWork       interfaces.ProofOfWorkHandler
@@ -24,22 +24,22 @@ type Server struct {
 }
 
 func New(c *container.Container) *Server {
-	config := c.Resolve("config").(*config.Config)
+	appConfig := c.Resolve("config").(*config.AppConfig)
 	dm := c.Resolve("difficultyManager").(interfaces.DifficultyManager)
 	qs := c.Resolve("quoteStorage").(interfaces.QuoteStorage)
 	po := c.Resolve("proofOfWorkHandler").(interfaces.ProofOfWorkHandler)
 
 	return &Server{
-		config:            config,
+		serverConfig:      appConfig.Server,
 		difficultyManager: dm,
 		quoteStorage:      qs,
 		proofOfWork:       po,
 	}
 }
 
-func (s *Server) Run(port, certPath, keyPath string) error {
+func (s *Server) Run(serverConfig config.ServerConfig) error {
 	// Загружаем сертификат и ключ для TLS
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	cert, err := tls.LoadX509KeyPair(serverConfig.CertPath, serverConfig.KeyPath)
 	if err != nil {
 		return fmt.Errorf("Ошибка загрузки сертификата: %v", err)
 	}
@@ -50,13 +50,13 @@ func (s *Server) Run(port, certPath, keyPath string) error {
 	}
 
 	// Запускаем TLS-листенер
-	listener, err := tls.Listen("tcp", port, tlsConfig)
+	listener, err := tls.Listen("tcp", serverConfig.Port, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("Ошибка запуска сервера: %v", err)
 	}
 	defer listener.Close()
 
-	logger.Log.Info().Msgf("Сервер запущен на порту %s", port)
+	logger.Log.Info().Msgf("Сервер запущен на порту %s", serverConfig.Port)
 
 	// Обработка системных сигналов для корректного завершения работы
 	quit := s.setupSignalHandler(listener)

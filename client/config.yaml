@@ -1,0 +1,8 @@
+server:
+  address: "localhost:3333"
+
+network:
+  timeout: "30s"
+
+logging:
+  level: "info"

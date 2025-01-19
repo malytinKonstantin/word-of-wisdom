@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"io"
 	"os"
 	"time"
 
@@ -9,7 +10,18 @@ import (
 
 var Log zerolog.Logger
 
-func Init() {
-	zerolog.TimeFieldFormat = time.RFC3339
-	Log = zerolog.New(os.Stdout).With().Timestamp().Logger().Level(zerolog.InfoLevel)
+func Init(logLevel string) {
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+
+	level, err := zerolog.ParseLevel(logLevel)
+	if err != nil {
+		level = zerolog.InfoLevel
+	}
+
+	consoleWriter := zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.RFC3339Nano,
+	}
+	multiWriter := io.MultiWriter(consoleWriter)
+	Log = zerolog.New(multiWriter).Level(level).With().Timestamp().Logger()
 }

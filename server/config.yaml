@@ -1,0 +1,16 @@
+server:
+  port: ":3333"
+  read_timeout: 30
+  max_connections: 1000
+  cert_path: "certs/server.crt"
+  key_path: "certs/server.key"
+
+pow:
+  base_difficulty: 4
+  max_difficulty: 6
+  min_difficulty: 3
+  min_solve_time: 5
+  max_solve_time: 10
+
+logging:
+  level: "info"

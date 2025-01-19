@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
+
+	"github.com/spf13/cobra"
 
 	"word-of-wisdom-client/internal/config"
 	"word-of-wisdom-client/internal/container"
@@ -12,11 +16,34 @@ import (
 	"word-of-wisdom-client/internal/pow"
 )
 
+var cfgPath string
+
 func main() {
-	cfg := config.NewDefault()
+	rootCmd := &cobra.Command{
+		Use:   "client",
+		Short: "Word of Wisdom Client",
+		Run:   runClient,
+	}
+
+	rootCmd.Flags().StringVar(&cfgPath, "config", "./configs", "Путь к директории с файлом конфигурации")
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func runClient(cmd *cobra.Command, args []string) {
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("Ошибка загрузки конфигурации")
+	}
+
+	logger.Init(cfg.Logging.Level)
+
 	logger.Log.Info().
-		Str("server_address", cfg.ServerAddr).
-		Dur("timeout", cfg.Timeout).
+		Str("server_address", cfg.Server.Address).
+		Dur("timeout", cfg.Network.Timeout).
 		Msg("Запуск клиента с конфигурацией")
 
 	c := container.New()
@@ -31,14 +58,14 @@ func main() {
 	netClient := c.Resolve("networkClient").(interfaces.NetworkClient)
 	powSolver := c.Resolve("powSolver").(interfaces.PoWSolver)
 
-	conn, err := netClient.Connect(cfg.ServerAddr)
+	conn, err := netClient.Connect(cfg.Server.Address)
 	if err != nil {
 		logger.Log.Fatal().Err(err).Msg("Ошибка подключения к серверу")
 	}
 	defer conn.Close()
 
 	logger.Log.Info().
-		Str("server_address", cfg.ServerAddr).
+		Str("server_address", cfg.Server.Address).
 		Dur("connection_time", time.Since(startTime)).
 		Msg("Успешное подключение к серверу")
 
@@ -54,7 +81,7 @@ func main() {
 	powStartTime := time.Now()
 	logger.Log.Info().Msg("Начало решения Proof of Work")
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.Timeout)
 	defer cancel()
 
 	nonce, err := powSolver.SolveProofOfWork(ctx, challenge, difficulty)

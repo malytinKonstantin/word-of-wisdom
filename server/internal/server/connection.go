@@ -14,12 +14,12 @@ import (
 )
 
 func (s *Server) acceptConnections(listener net.Listener, quit chan os.Signal) error {
-	logger.Log.Info().Int("max_connections", s.config.MaxConnections).Msg("Сервер начал прием подключений")
+	logger.Log.Info().Int("max_connections", s.serverConfig.MaxConnections).Msg("Сервер начал прием подключений")
 
 	for {
 		// Проверяем лимит активных подключений
-		if atomic.LoadInt32(&s.activeConnections) >= int32(s.config.MaxConnections) {
-			logger.Log.Info().Int("max_connections", s.config.MaxConnections).Msg("Достигнуто максимальное количество подключений")
+		if atomic.LoadInt32(&s.activeConnections) >= int32(s.serverConfig.MaxConnections) {
+			logger.Log.Info().Int("max_connections", s.serverConfig.MaxConnections).Msg("Достигнуто максимальное количество подключений")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -61,7 +61,7 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	logger.Log.Info().Str("client", clientAddr).Msg("Начало обработки соединения")
 
 	// Устанавливаем таймаут на соединение через контекст
-	connCtx, cancel := context.WithTimeout(ctx, s.config.ReadTimeout)
+	connCtx, cancel := context.WithTimeout(ctx, time.Duration(s.serverConfig.ReadTimeout)*time.Second)
 	defer cancel()
 
 	challenge := utils.GenerateChallenge()

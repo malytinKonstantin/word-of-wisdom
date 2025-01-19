@@ -1,8 +1,11 @@
 package main
 
 import (
-	"flag"
+	"fmt"
+	"os"
 	"runtime"
+
+	"github.com/spf13/cobra"
 
 	"word-of-wisdom-server/internal/config"
 	"word-of-wisdom-server/internal/container"
@@ -13,30 +16,48 @@ import (
 )
 
 func main() {
-	logger.Init()
+	var configPath string
 
-	// Создаём DI-контейнер
+	// Создаем корневую команду Cobra
+	rootCmd := &cobra.Command{
+		Use:   "server",
+		Short: "Word of Wisdom Server",
+		Run: func(cmd *cobra.Command, args []string) {
+			runServer(configPath)
+		},
+	}
+
+	// Добавляем флаг для указания пути к конфигурационному файлу
+	rootCmd.Flags().StringVarP(&configPath, "config", "c", "config.yaml", "Путь к файлу конфигурации")
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func runServer(configPath string) {
+	// Загружаем конфигурацию
+	appConfig, err := config.LoadConfig(configPath)
+	if err != nil {
+		fmt.Printf("Ошибка загрузки конфигурации: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Инициализируем логгер с уровнем из конфигурации
+	logger.Init(appConfig.Logging.Level)
+
+	// Устанавливаем количество используемых CPU
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	// Создаем DI-контейнер
 	c := container.New()
 
-	config := config.NewDefaultConfig()
-
-	// Обработка флагов командной строки для переопределения настроек
-	port := flag.String("port", config.Port, "Порт для запуска сервера")
-	certPath := flag.String("cert", "certs/server.crt", "Путь к файлу сертификата")
-	keyPath := flag.String("key", "certs/server.key", "Путь к файлу ключа")
-	numCPU := flag.Int("cpu", runtime.NumCPU(), "Количество используемых CPU")
-	maxConn := flag.Int("max-conn", config.MaxConnections, "Максимальное количество одновременных подключений")
-	flag.Parse()
-
-	// Обновляем конфигурацию на основе аргументов командной строки
-	config.MaxConnections = *maxConn
-	runtime.GOMAXPROCS(*numCPU)
-
 	// Регистрируем конфигурацию в контейнере
-	c.Register("config", config)
+	c.Register("config", appConfig)
 
 	// Инициализация зависимостей
-	dm := pow.NewDifficultyManager(config)
+	dm := pow.NewDifficultyManager(appConfig.PoW)
 	qs := storage.New()
 	po := pow.New(c)
 	srv := server.New(c)
@@ -47,7 +68,8 @@ func main() {
 	c.Register("proofOfWorkHandler", po)
 	c.Register("server", srv)
 
-	if err := srv.Run(*port, *certPath, *keyPath); err != nil {
+	// Запуск сервера
+	if err := srv.Run(appConfig.Server); err != nil {
 		logger.Log.Fatal().Err(err).Msg("Ошибка запуска сервера")
 	}
 }
